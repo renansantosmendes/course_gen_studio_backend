@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Tests and pylint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python 3.12
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: requirements*.txt
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv pip install -r requirements-dev.txt
+
+      - name: Run pylint on the application code
+        run: uv run --no-project pylint --rcfile=.pylintrc src api
+
+      - name: Run pylint on the tests
+        run: uv run --no-project pylint --rcfile=tests/.pylintrc tests
+
+      - name: Run the unit tests
+        run: uv run --no-project pytest -q
