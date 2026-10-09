@@ -4,6 +4,9 @@ import pytest
 from pydantic import ValidationError
 
 from coursegen_backend.infrastructure.config import Settings
+from tests.credentials import (
+    JWT_SECRET,
+)
 
 
 def test_settings_read_environment(
@@ -21,7 +24,7 @@ def test_settings_read_environment(
     None
     """
     monkeypatch.setenv("COURSEGEN_DATABASE_URL", "postgresql://db/test")
-    monkeypatch.setenv("COURSEGEN_JWT_SECRET_KEY", "s3cr3t-value-xyz")
+    monkeypatch.setenv("COURSEGEN_JWT_SECRET_KEY", JWT_SECRET)
     monkeypatch.setenv(
         "CORS_ALLOWED_ORIGINS",
         "https://a.edu, ,https://b.edu",
@@ -30,7 +33,7 @@ def test_settings_read_environment(
     assert settings.database_url.get_secret_value() == "postgresql://db/test"
     assert settings.access_token_ttl_minutes == 15
     assert settings.cors_origins == ["https://a.edu", "https://b.edu"]
-    assert "s3cr3t-value-xyz" not in repr(settings)
+    assert JWT_SECRET not in repr(settings)
 
 
 def test_settings_require_database_and_secret(

@@ -101,13 +101,13 @@ class LoginUseCase:
         Example
         -------
         >>> result = login_use_case.execute(
-        ...     email="ana@uni.edu",
-        ...     password="correct-horse-42",
+        ...     email="ana@example.com",
+        ...     password=password_typed_by_user,
         ...     keep_signed_in=True,
         ...     context=RequestContext(ip_address="203.0.113.7"),
         ... )
         >>> result.tokens.access_token
-        'eyJhbGciOi...'
+        '<access-token>'
         """
         moment = self._clock.now()
         with self._unit_of_work as uow:

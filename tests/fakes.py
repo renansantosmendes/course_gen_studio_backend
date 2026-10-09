@@ -27,6 +27,10 @@ from coursegen_backend.domain.entities import (
     User,
     UserSession,
 )
+from tests.credentials import (
+    TEST_EMAIL,
+    VALID_PASSWORD,
+)
 
 DEFAULT_MOMENT = datetime.now(UTC).replace(microsecond=0)
 
@@ -787,8 +791,8 @@ class InMemoryUnitOfWork(UnitOfWork):
 
 
 def make_user(
-    email: str = "camila.torres@instituicao.edu.br",
-    password: str | None = "Planejamento2026",
+    email: str = TEST_EMAIL,
+    password: str | None = VALID_PASSWORD,
     is_active: bool = True,
 ) -> User:
     """Build a user whose hash matches ``FakePasswordHasher``.

@@ -17,9 +17,14 @@ from tests.fakes import (
     make_membership,
     make_user,
 )
+from tests.credentials import (
+    NEW_PASSWORD,
+    TEST_EMAIL,
+    VALID_PASSWORD,
+    WRONG_PASSWORD,
+)
 
 API = "/api/v1"
-PASSWORD = "Planejamento2026"
 
 
 @dataclass
@@ -90,7 +95,7 @@ def harness(
 
 def login(
     harness: ApiHarness,
-    password: str = PASSWORD,
+    password: str = VALID_PASSWORD,
 ) -> dict:
     """Call the sign-in endpoint.
 
@@ -109,7 +114,7 @@ def login(
     response = harness.client.post(
         f"{API}/auth/login",
         json={
-            "email": "camila.torres@instituicao.edu.br",
+            "email": TEST_EMAIL,
             "password": password,
             "keep_signed_in": True,
         },
@@ -175,7 +180,7 @@ def test_login_me_refresh_logout_flow(harness: ApiHarness) -> None:
         headers=bearer(body["access_token"]),
     )
     assert me.status_code == 200
-    assert me.json()["email"] == "camila.torres@instituicao.edu.br"
+    assert me.json()["email"] == TEST_EMAIL
     refreshed = harness.client.post(
         f"{API}/auth/refresh",
         json={"refresh_token": body["refresh_token"]},
@@ -214,7 +219,7 @@ def test_login_failures_and_throttle(harness: ApiHarness) -> None:
     None
     """
     for _ in range(2):
-        failed = login(harness, password="wrong-password1")
+        failed = login(harness, password=WRONG_PASSWORD)
         assert failed["status_code"] == 401
         assert failed["code"] == "invalid_credentials"
     event, _ = harness.unit_of_work.audit_log.entries[0]
@@ -222,8 +227,8 @@ def test_login_failures_and_throttle(harness: ApiHarness) -> None:
     response = harness.client.post(
         f"{API}/auth/login",
         json={
-            "email": "camila.torres@instituicao.edu.br",
-            "password": PASSWORD,
+            "email": TEST_EMAIL,
+            "password": VALID_PASSWORD,
         },
     )
     assert response.status_code == 429
@@ -291,7 +296,7 @@ def test_forgot_and_reset_password_flow(harness: ApiHarness) -> None:
     )
     known = harness.client.post(
         f"{API}/auth/password/forgot",
-        json={"email": "camila.torres@instituicao.edu.br"},
+        json={"email": TEST_EMAIL},
     )
     assert unknown.status_code == known.status_code == 202
     assert unknown.json() == known.json()
@@ -307,10 +312,10 @@ def test_forgot_and_reset_password_flow(harness: ApiHarness) -> None:
     assert weak.json()["details"]
     reset = harness.client.post(
         f"{API}/auth/password/reset",
-        json={"reset_token": token, "new_password": "NovaSenhaSegura2026"},
+        json={"reset_token": token, "new_password": NEW_PASSWORD},
     )
     assert reset.status_code == 204
-    assert login(harness, password="NovaSenhaSegura2026")["status_code"] == 200
+    assert login(harness, password=NEW_PASSWORD)["status_code"] == 200
 
 
 def test_change_password(harness: ApiHarness) -> None:
@@ -329,8 +334,8 @@ def test_change_password(harness: ApiHarness) -> None:
     wrong = harness.client.post(
         f"{API}/auth/password/change",
         json={
-            "current_password": "wrong-password1",
-            "new_password": "NovaSenhaSegura2026",
+            "current_password": WRONG_PASSWORD,
+            "new_password": NEW_PASSWORD,
         },
         headers=bearer(access_token),
     )
@@ -338,8 +343,8 @@ def test_change_password(harness: ApiHarness) -> None:
     changed = harness.client.post(
         f"{API}/auth/password/change",
         json={
-            "current_password": PASSWORD,
-            "new_password": "NovaSenhaSegura2026",
+            "current_password": VALID_PASSWORD,
+            "new_password": NEW_PASSWORD,
         },
         headers=bearer(access_token),
     )

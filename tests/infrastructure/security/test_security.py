@@ -17,6 +17,10 @@ from coursegen_backend.infrastructure.security.opaque_token_generator import (
     SecretsOpaqueTokenGenerator,
 )
 from tests.conftest import TEST_JWT_SECRET
+from tests.credentials import (
+    OTHER_JWT_SECRET,
+    VALID_PASSWORD,
+)
 
 
 @pytest.fixture(scope="module")
@@ -45,10 +49,10 @@ def test_argon2_hash_verifies_only_the_right_password(
     -------
     None
     """
-    password_hash = hasher.hash("Planejamento2026")
+    password_hash = hasher.hash(VALID_PASSWORD)
     assert password_hash.startswith("$argon2id$")
-    assert password_hash != hasher.hash("Planejamento2026")
-    assert hasher.verify(password_hash, "Planejamento2026")
+    assert password_hash != hasher.hash(VALID_PASSWORD)
+    assert hasher.verify(password_hash, VALID_PASSWORD)
     assert not hasher.verify(password_hash, "planejamento2026")
 
 
@@ -85,8 +89,8 @@ def test_argon2_detects_outdated_parameters(
     None
     """
     stronger = Argon2PasswordHasher(time_cost=2, memory_cost=8, parallelism=1)
-    assert stronger.needs_rehash(hasher.hash("Planejamento2026"))
-    assert not hasher.needs_rehash(hasher.hash("Planejamento2026"))
+    assert stronger.needs_rehash(hasher.hash(VALID_PASSWORD))
+    assert not hasher.needs_rehash(hasher.hash(VALID_PASSWORD))
     hasher.simulate_verification("whatever")
 
 
@@ -145,7 +149,7 @@ def test_jwt_rejects_other_secret_and_wrong_type() -> None:
             "iat": now,
             "exp": now + timedelta(minutes=5),
         },
-        "another-secret-key-with-enough-length-0000",
+        OTHER_JWT_SECRET,
         algorithm="HS256",
     )
     with pytest.raises(InvalidAccessTokenError):

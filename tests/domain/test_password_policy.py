@@ -4,13 +4,17 @@ import pytest
 
 from coursegen_backend.domain.exceptions import WeakPasswordError
 from coursegen_backend.domain.password_policy import PasswordPolicy
+from tests.credentials import (
+    NEW_PASSWORD,
+    TEST_EMAIL,
+)
 
-EMAIL = "camila.torres@instituicao.edu.br"
+EMAIL = TEST_EMAIL
 
 
 def test_strong_password_has_no_violations() -> None:
     """A long password with letters and digits is accepted."""
-    assert not PasswordPolicy().find_violations("NovaSenha2026", EMAIL)
+    assert not PasswordPolicy().find_violations(NEW_PASSWORD, EMAIL)
 
 
 @pytest.mark.parametrize(
@@ -20,8 +24,8 @@ def test_strong_password_has_no_violations() -> None:
         ("a1" * 65, "at most 128 characters"),
         ("1234567890", "at least one letter"),
         ("SomenteLetras", "at least one digit"),
-        (" NovaSenha2026", "whitespace"),
-        ("camila.torres2026", "e-mail"),
+        (f" {NEW_PASSWORD}", "whitespace"),
+        ("user2026-user", "e-mail"),
     ],
 )
 def test_each_rule_is_reported(
@@ -60,4 +64,4 @@ def test_validate_raises_with_all_violations() -> None:
 
 def test_validate_accepts_strong_password() -> None:
     """``validate`` returns silently for a valid password."""
-    PasswordPolicy().validate("NovaSenha2026", EMAIL)
+    PasswordPolicy().validate(NEW_PASSWORD, EMAIL)

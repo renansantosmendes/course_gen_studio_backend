@@ -16,8 +16,8 @@ class LoginRequest(BaseModel):
         json_schema_extra={
             "examples": [
                 {
-                    "email": "camila.torres@instituicao.edu.br",
-                    "password": "Planejamento2026",
+                    "email": "camila.torres@example.com",
+                    "password": "<your-password>",
                     "keep_signed_in": True,
                 }
             ]
@@ -53,7 +53,7 @@ class RefreshRequest(BaseModel):
             "Refresh token received from `POST /auth/login` or from the "
             "previous `POST /auth/refresh`."
         ),
-        examples=["q3V1c2VyLXJlZnJlc2gtdG9rZW4tZXhhbXBsZQ"],
+        examples=["<refresh-token>"],
     )
 
 
@@ -65,7 +65,7 @@ class TokenResponse(BaseModel):
             "Short-lived JWT. Send it in the `Authorization: Bearer "
             "<access_token>` header of authenticated requests."
         ),
-        examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."],
+        examples=["<access-token>"],
     )
     token_type: Literal["bearer"] = Field(
         default="bearer",
@@ -84,7 +84,7 @@ class TokenResponse(BaseModel):
             "credentials. Store it securely; each refresh returns a new "
             "one and invalidates the previous."
         ),
-        examples=["q3V1c2VyLXJlZnJlc2gtdG9rZW4tZXhhbXBsZQ"],
+        examples=["<refresh-token>"],
     )
     refresh_token_expires_at: datetime = Field(
         description="Expiration moment of the refresh token (UTC).",
@@ -150,7 +150,7 @@ class UserResponse(BaseModel):
     id: UUID = Field(description="Identifier of the user.")
     email: EmailStr = Field(
         description="Institutional e-mail.",
-        examples=["camila.torres@instituicao.edu.br"],
+        examples=["camila.torres@example.com"],
     )
     full_name: str = Field(
         description="Name displayed in the interface.",

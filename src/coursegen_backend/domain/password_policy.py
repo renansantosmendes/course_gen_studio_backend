@@ -43,7 +43,7 @@ class PasswordPolicy:
 
         Example
         -------
-        >>> PasswordPolicy().find_violations("short", "ana@uni.edu")
+        >>> PasswordPolicy().find_violations("short", "ana@example.com")
         ['Password must have at least 10 characters.', ...]
         """
         violations = []

@@ -40,6 +40,12 @@ from tests.fakes import (
     RecordingEmailSender,
     make_user,
 )
+from tests.credentials import (
+    NEW_PASSWORD,
+    OTHER_NEW_PASSWORD,
+    VALID_PASSWORD,
+    WRONG_PASSWORD,
+)
 
 CONTEXT = RequestContext(ip_address="203.0.113.7")
 RESET_PAGE = "https://app.edu/coursegen-login.html"
@@ -306,14 +312,14 @@ def test_reset_replaces_password_and_ends_sessions(
         CONTEXT,
         clock.now(),
     )
-    reset_use_case.execute(token, "NovaSenhaSegura2026", CONTEXT)
+    reset_use_case.execute(token, NEW_PASSWORD, CONTEXT)
     assert (
         unit_of_work.users.get_by_id(user.id).password_hash
-        == "hashed:NovaSenhaSegura2026"
+        == f"hashed:{NEW_PASSWORD}"
     )
     assert unit_of_work.sessions.get_by_id(session.session_id).revoked_at
     with pytest.raises(InvalidPasswordResetTokenError):
-        reset_use_case.execute(token, "OutraSenha2026x", CONTEXT)
+        reset_use_case.execute(token, OTHER_NEW_PASSWORD, CONTEXT)
     assert audit_actions.PASSWORD_RESET_COMPLETED in (
         unit_of_work.audit_log.actions
     )
@@ -350,7 +356,7 @@ def test_reset_rejects_expired_token(
     )
     clock.advance(timedelta(minutes=31))
     with pytest.raises(InvalidPasswordResetTokenError):
-        reset_use_case.execute(token, "NovaSenhaSegura2026", CONTEXT)
+        reset_use_case.execute(token, NEW_PASSWORD, CONTEXT)
 
 
 def test_reset_enforces_policy_and_rejects_reuse(
@@ -385,8 +391,8 @@ def test_reset_enforces_policy_and_rejects_reuse(
     with pytest.raises(WeakPasswordError):
         reset_use_case.execute(token, "short", CONTEXT)
     with pytest.raises(PasswordReuseError):
-        reset_use_case.execute(token, "Planejamento2026", CONTEXT)
-    reset_use_case.execute(token, "NovaSenhaSegura2026", CONTEXT)
+        reset_use_case.execute(token, VALID_PASSWORD, CONTEXT)
+    reset_use_case.execute(token, NEW_PASSWORD, CONTEXT)
 
 
 def test_change_password_keeps_current_session_only(
@@ -438,8 +444,8 @@ def test_change_password_keeps_current_session_only(
             user=user,
             session_id=current.session_id,
         ),
-        current_password="Planejamento2026",
-        new_password="NovaSenhaSegura2026",
+        current_password=VALID_PASSWORD,
+        new_password=NEW_PASSWORD,
         context=CONTEXT,
     )
     sessions = unit_of_work.sessions
@@ -451,9 +457,9 @@ def test_change_password_keeps_current_session_only(
 @pytest.mark.parametrize(
     ("current_password", "new_password", "expected_error"),
     [
-        ("wrong-password1", "NovaSenhaSegura2026", IncorrectCurrentPasswordError),
-        ("Planejamento2026", "short", WeakPasswordError),
-        ("Planejamento2026", "Planejamento2026", PasswordReuseError),
+        (WRONG_PASSWORD, NEW_PASSWORD, IncorrectCurrentPasswordError),
+        (VALID_PASSWORD, "short", WeakPasswordError),
+        (VALID_PASSWORD, VALID_PASSWORD, PasswordReuseError),
     ],
 )
 def test_change_password_errors(

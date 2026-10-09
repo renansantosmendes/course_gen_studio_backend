@@ -17,6 +17,10 @@ from coursegen_backend.infrastructure.email.logging_email_sender import (
 from coursegen_backend.infrastructure.email.smtp_email_sender import (
     SmtpEmailSender,
 )
+from tests.credentials import (
+    JWT_SECRET,
+    SMTP_PASSWORD,
+)
 
 MESSAGE = EmailMessage(
     recipient="camila@uni.edu",
@@ -40,7 +44,7 @@ def build_settings(**overrides: object) -> Settings:
     """
     values = {
         "COURSEGEN_DATABASE_URL": "postgresql://localhost/test",
-        "COURSEGEN_JWT_SECRET_KEY": "secret",
+        "COURSEGEN_JWT_SECRET_KEY": JWT_SECRET,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -88,11 +92,11 @@ def test_smtp_sender_uses_starttls_and_login(
         port=587,
         sender="no-reply@uni.edu",
         username="user",
-        password="pass",
+        password=SMTP_PASSWORD,
     ).send(MESSAGE)
     smtp_class.assert_called_once_with("smtp.uni.edu", 587, timeout=10)
     client.starttls.assert_called_once()
-    client.login.assert_called_once_with("user", "pass")
+    client.login.assert_called_once_with("user", SMTP_PASSWORD)
     sent = client.send_message.call_args.args[0]
     assert sent["To"] == "camila@uni.edu"
     assert sent["From"] == "no-reply@uni.edu"
@@ -106,7 +110,7 @@ def test_factory_selects_backend() -> None:
             email_backend="smtp",
             smtp_host="smtp.uni.edu",
             smtp_sender="no-reply@uni.edu",
-            smtp_password="pass",
+            smtp_password=SMTP_PASSWORD,
         )
     )
     assert isinstance(smtp_sender, SmtpEmailSender)

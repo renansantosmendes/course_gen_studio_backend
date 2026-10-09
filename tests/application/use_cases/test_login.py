@@ -22,6 +22,11 @@ from tests.fakes import (
     make_membership,
     make_user,
 )
+from tests.credentials import (
+    TEST_EMAIL,
+    VALID_PASSWORD,
+    WRONG_PASSWORD,
+)
 
 CONTEXT = RequestContext(ip_address="203.0.113.7", user_agent="pytest")
 
@@ -86,8 +91,8 @@ def test_successful_login_opens_session_and_returns_profile(
     membership = make_membership()
     user = unit_of_work.users.add(make_user(), [membership])
     result = use_case.execute(
-        email="CAMILA.TORRES@instituicao.edu.br",
-        password="Planejamento2026",
+        email=TEST_EMAIL.upper(),
+        password=VALID_PASSWORD,
         keep_signed_in=True,
         context=CONTEXT,
     )
@@ -118,7 +123,7 @@ def test_wrong_password_is_rejected_and_audited(
     """
     user = unit_of_work.users.add(make_user())
     with pytest.raises(InvalidCredentialsError):
-        use_case.execute(user.email, "wrong-password1", False, CONTEXT)
+        use_case.execute(user.email, WRONG_PASSWORD, False, CONTEXT)
     event, _ = unit_of_work.audit_log.entries[0]
     assert event.action == audit_actions.LOGIN_FAILED
     assert event.entity_id == user.id
@@ -180,7 +185,7 @@ def test_inactive_or_sso_only_accounts_cannot_sign_in(
     """
     user = unit_of_work.users.add(make_user(**user_factory_arguments))
     with pytest.raises(InvalidCredentialsError):
-        use_case.execute(user.email, "Planejamento2026", False, CONTEXT)
+        use_case.execute(user.email, VALID_PASSWORD, False, CONTEXT)
 
 
 def test_account_is_throttled_after_too_many_failures(
@@ -206,14 +211,14 @@ def test_account_is_throttled_after_too_many_failures(
     user = unit_of_work.users.add(make_user())
     for _ in range(3):
         with pytest.raises(InvalidCredentialsError):
-            use_case.execute(user.email, "wrong-password1", False, CONTEXT)
+            use_case.execute(user.email, WRONG_PASSWORD, False, CONTEXT)
     with pytest.raises(TooManyLoginAttemptsError) as error_info:
-        use_case.execute(user.email, "Planejamento2026", False, CONTEXT)
+        use_case.execute(user.email, VALID_PASSWORD, False, CONTEXT)
     assert error_info.value.retry_after_seconds == 900
     clock.advance(timedelta(minutes=16))
     result = use_case.execute(
         user.email,
-        "Planejamento2026",
+        VALID_PASSWORD,
         False,
         CONTEXT,
     )
@@ -250,8 +255,8 @@ def test_outdated_hash_is_upgraded_on_login(
         clock=clock,
     )
     hasher.hash = lambda password: f"argon2-new:{password}"
-    use_case.execute(user.email, "Planejamento2026", False, CONTEXT)
+    use_case.execute(user.email, VALID_PASSWORD, False, CONTEXT)
     assert (
         unit_of_work.users.get_by_id(user.id).password_hash
-        == "argon2-new:Planejamento2026"
+        == f"argon2-new:{VALID_PASSWORD}"
     )

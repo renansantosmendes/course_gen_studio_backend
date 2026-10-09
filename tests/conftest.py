@@ -15,8 +15,11 @@ from coursegen_backend.infrastructure.security.opaque_token_generator import (
     SecretsOpaqueTokenGenerator,
 )
 from tests.fakes import FakeClock, FakePasswordHasher, InMemoryUnitOfWork
+from tests.credentials import (
+    JWT_SECRET,
+)
 
-TEST_JWT_SECRET = "test-secret-key-with-enough-length-for-hs256"
+TEST_JWT_SECRET = JWT_SECRET
 
 
 @pytest.fixture

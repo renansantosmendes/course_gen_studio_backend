@@ -14,7 +14,7 @@ class ForgotPasswordRequest(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "examples": [{"email": "camila.torres@instituicao.edu.br"}]
+            "examples": [{"email": "camila.torres@example.com"}]
         }
     )
 
@@ -30,8 +30,8 @@ class ResetPasswordRequest(BaseModel):
         json_schema_extra={
             "examples": [
                 {
-                    "reset_token": "Zm9yZ290LXBhc3N3b3JkLXRva2VuLWV4YW1wbGU",
-                    "new_password": "NovaSenhaSegura2026",
+                    "reset_token": "<reset-token-from-email>",
+                    "new_password": "<new-password>",
                 }
             ]
         }
@@ -59,8 +59,8 @@ class ChangePasswordRequest(BaseModel):
         json_schema_extra={
             "examples": [
                 {
-                    "current_password": "Planejamento2026",
-                    "new_password": "NovaSenhaSegura2026",
+                    "current_password": "<current-password>",
+                    "new_password": "<new-password>",
                 }
             ]
         }
