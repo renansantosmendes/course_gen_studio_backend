@@ -10,10 +10,9 @@ class ErrorResponse(BaseModel):
         json_schema_extra={
             "examples": [
                 {
-                    "code": "weak_password",
-                    "message": "The password does not meet the password "
-                    "policy.",
-                    "details": ["Password must contain at least one digit."],
+                    "code": "validation_error",
+                    "message": "The request body or parameters are invalid.",
+                    "details": ["query.limit: Input should be a valid integer"],
                 }
             ]
         }
@@ -24,17 +23,17 @@ class ErrorResponse(BaseModel):
             "Stable, machine-readable error identifier. Client code should "
             "branch on this value, never on `message`."
         ),
-        examples=["invalid_credentials"],
+        examples=["invalid_access_token"],
     )
     message: str = Field(
         description="Human-readable explanation of the error, in English.",
-        examples=["Invalid e-mail or password."],
+        examples=["The access token is missing, invalid or expired."],
     )
     details: list[str] | None = Field(
         default=None,
         description=(
-            "Additional explanations, such as each broken password rule "
-            "or each invalid request field. Omitted when not applicable."
+            "Additional explanations, such as each invalid request field. "
+            "Omitted when not applicable."
         ),
     )
 

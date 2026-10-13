@@ -11,72 +11,52 @@ from coursegen_backend.infrastructure.config import Settings, get_settings
 from coursegen_backend.presentation.api.error_handlers import (
     register_error_handlers,
 )
-from coursegen_backend.presentation.api.routers import auth, health, password
+from coursegen_backend.presentation.api.routers import health, me
 
 API_PREFIX = "/api/v1"
 
 API_DESCRIPTION = """
-Authentication and password management API of **CourseGen Studio**
-(SynapseAI Solutions).
+API of **CourseGen Studio** (SynapseAI Solutions).
 
-## How authentication works
+## Authentication
 
-1. **Sign in** with `POST /api/v1/auth/login`. The response carries an
-   `access_token`, a `refresh_token` and the user profile.
-2. Send the access token in every authenticated request:
-   `Authorization: Bearer <access_token>`. In this page, click
-   **Authorize** and paste the token.
-3. The access token is short-lived (15 minutes by default). When a request
-   answers `401`, call `POST /api/v1/auth/refresh` with the refresh token.
-   Each refresh **returns a new refresh token and invalidates the previous
-   one**, so always store the latest.
-4. **Sign out** with `POST /api/v1/auth/logout`. The session ends at once,
-   on the server side.
+CourseGen does not sign users in itself: accounts, sessions and passwords
+live in the shared **auth service**. The front end signs in there
+(`POST /api/v1/auth/login`), renews the session there
+(`POST /api/v1/auth/refresh`) and sends the access token it receives to
+this API as `Authorization: Bearer <access_token>`. In this page, click
+**Authorize** and paste the token.
 
-## Password management
-
-- **Forgot password**: `POST /api/v1/auth/password/forgot` e-mails a
-  single-use link `<PASSWORD_RESET_URL>#reset_token=<token>`. The answer is
-  the same whether or not the e-mail is registered.
-- **Reset password**: `POST /api/v1/auth/password/reset` with that token
-  defines the new password and ends every session of the user.
-- **Change password**: `POST /api/v1/auth/password/change` (authenticated)
-  requires the current password and ends the other sessions of the user.
-
-New passwords must have 10 to 128 characters, at least one letter and one
-digit, no leading or trailing whitespace, and must not contain the part of
-the e-mail before the `@`.
+This API verifies each token with the auth service's public keys (RS256,
+`AUTH_JWKS_URL`), checking issuer and audience. The first request of an
+account creates its CourseGen profile with the token's identifier, e-mail
+and name.
 
 ## Errors
 
 Every error answers with the same body:
 
 ```json
-{"code": "invalid_credentials", "message": "Invalid e-mail or password."}
+{"code": "invalid_access_token", "message": "The access token is missing, invalid or expired."}
 ```
 
 `code` is stable and meant for client logic; `message` is for humans.
-Some errors include `details`, such as each broken password rule.
 
 | Status | Codes |
 |--------|-------|
-| 400 | `invalid_password_reset_token`, `weak_password`, `password_reuse`, `incorrect_current_password` |
-| 401 | `invalid_credentials`, `invalid_access_token`, `invalid_refresh_token` |
+| 401 | `invalid_access_token` |
+| 403 | `account_disabled` |
+| 409 | `account_link_conflict` |
 | 422 | `validation_error` |
-| 429 | `too_many_login_attempts` (see the `Retry-After` header) |
 | 500 | `internal_error` |
+| 503 | `auth_service_unavailable` |
 """
 
 OPENAPI_TAGS = [
     {
-        "name": "Authentication",
-        "description": "Sign in, renew and end sessions, and read the "
-        "authenticated user.",
-    },
-    {
-        "name": "Password management",
-        "description": "Recover a forgotten password by e-mail or change "
-        "the current one.",
+        "name": "Profile",
+        "description": "The authenticated user's CourseGen profile, "
+        "organizations and roles.",
     },
     {
         "name": "Health",
@@ -109,8 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="CourseGen Studio API",
         version=__version__,
-        summary="Sign-in, session and password management for CourseGen "
-        "Studio.",
+        summary="Course design back end of CourseGen Studio.",
         description=API_DESCRIPTION,
         openapi_tags=OPENAPI_TAGS,
         contact={
@@ -137,8 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
     register_error_handlers(app)
     app.include_router(health.router, prefix=API_PREFIX)
-    app.include_router(auth.router, prefix=API_PREFIX)
-    app.include_router(password.router, prefix=API_PREFIX)
+    app.include_router(me.router, prefix=API_PREFIX)
 
     @app.get("/", include_in_schema=False)
     def redirect_to_docs() -> RedirectResponse:

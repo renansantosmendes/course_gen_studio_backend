@@ -4,9 +4,9 @@ import pytest
 from pydantic import ValidationError
 
 from coursegen_backend.infrastructure.config import Settings
-from tests.credentials import (
-    JWT_SECRET,
-)
+
+DATABASE_URL = "postgresql://db/test"
+JWKS_URL = "https://auth.example.com/.well-known/jwks.json"
 
 
 def test_settings_read_environment(
@@ -23,34 +23,41 @@ def test_settings_read_environment(
     -------
     None
     """
-    monkeypatch.setenv("COURSEGEN_DATABASE_URL", "postgresql://db/test")
-    monkeypatch.setenv("COURSEGEN_JWT_SECRET_KEY", JWT_SECRET)
+    monkeypatch.setenv("COURSEGEN_DATABASE_URL", DATABASE_URL)
+    monkeypatch.setenv("AUTH_JWKS_URL", JWKS_URL)
     monkeypatch.setenv(
         "CORS_ALLOWED_ORIGINS",
         "https://a.edu, ,https://b.edu",
     )
     settings = Settings(_env_file=None)
-    assert settings.database_url.get_secret_value() == "postgresql://db/test"
-    assert settings.access_token_ttl_minutes == 15
+    assert settings.database_url.get_secret_value() == DATABASE_URL
+    assert settings.auth_jwks_url == JWKS_URL
+    assert settings.auth_issuer == "auth-service"
+    assert settings.auth_audience == "synapse-apps"
     assert settings.cors_origins == ["https://a.edu", "https://b.edu"]
-    assert JWT_SECRET not in repr(settings)
+    assert DATABASE_URL not in repr(settings)
 
 
-def test_settings_require_database_and_secret(
+@pytest.mark.parametrize("missing", ["COURSEGEN_DATABASE_URL", "AUTH_JWKS_URL"])
+def test_settings_require_database_and_jwks(
     monkeypatch: pytest.MonkeyPatch,
+    missing: str,
 ) -> None:
     """Missing mandatory variables fail at start-up.
 
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-        Removes environment variables.
+        Sets and removes environment variables.
+    missing : str
+        Variable left out.
 
     Returns
     -------
     None
     """
-    monkeypatch.delenv("COURSEGEN_DATABASE_URL", raising=False)
-    monkeypatch.delenv("COURSEGEN_JWT_SECRET_KEY", raising=False)
+    monkeypatch.setenv("COURSEGEN_DATABASE_URL", DATABASE_URL)
+    monkeypatch.setenv("AUTH_JWKS_URL", JWKS_URL)
+    monkeypatch.delenv(missing)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)

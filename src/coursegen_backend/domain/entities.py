@@ -1,51 +1,75 @@
-"""Domain entities of the authentication context."""
+"""Domain entities of CourseGen Studio's identity context."""
 
 from dataclasses import dataclass
-from datetime import datetime
 from uuid import UUID
 
 
 @dataclass(frozen=True)
+class VerifiedIdentity:
+    """Who a valid access token issued by the auth service belongs to.
+
+    Attributes
+    ----------
+    user_id : UUID
+        Identifier of the account in the auth service (``sub`` claim).
+        CourseGen uses the same value as the primary key of its users.
+    email : str
+        E-mail of the account (``email`` claim).
+    full_name : str
+        Name of the account (``name`` claim).
+    """
+
+    user_id: UUID
+    email: str
+    full_name: str
+
+
+@dataclass(frozen=True)
 class User:
-    """A person who can sign in to CourseGen Studio.
+    """CourseGen Studio's profile of an authenticated person.
 
     Attributes
     ----------
     id : UUID
-        Unique identifier of the user.
+        Same identifier as the account in the auth service.
     email : str
-        Institutional e-mail address, unique and case-insensitive.
+        E-mail, kept in sync with the auth service.
     full_name : str
-        Name displayed in the interface.
+        Name, kept in sync with the auth service.
     job_title : str | None
         Optional job title, for example "Instructional designer".
-    password_hash : str | None
-        Hash of the password, or ``None`` when the account signs in only
-        through an external identity provider.
     is_active : bool
-        Whether the account is allowed to sign in.
-    last_login_at : datetime | None
-        Moment of the last successful sign-in, if any.
+        Whether the person may use CourseGen Studio. Independent of the
+        auth service: an administrator can block access to CourseGen
+        only.
     """
 
     id: UUID
     email: str
     full_name: str
     job_title: str | None
-    password_hash: str | None
     is_active: bool
-    last_login_at: datetime | None
 
-    @property
-    def can_sign_in_with_password(self) -> bool:
-        """Tell whether the user may authenticate with a password.
+    def matches(
+        self,
+        identity: VerifiedIdentity,
+    ) -> bool:
+        """Tell whether the profile already reflects an identity.
+
+        Parameters
+        ----------
+        identity : VerifiedIdentity
+            Identity read from a valid access token.
 
         Returns
         -------
         bool
-            ``True`` when the account is active and has a password set.
+            ``True`` when e-mail and name are up to date.
         """
-        return self.is_active and self.password_hash is not None
+        return (
+            self.email.casefold() == identity.email.casefold()
+            and self.full_name == identity.full_name
+        )
 
 
 @dataclass(frozen=True)
@@ -69,90 +93,3 @@ class OrganizationMembership:
     organization_name: str
     organization_slug: str
     roles: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class UserSession:
-    """A signed-in session, renewed through a refresh token.
-
-    Attributes
-    ----------
-    id : UUID
-        Identifier of the session, embedded in the access tokens.
-    user_id : UUID
-        Owner of the session.
-    keep_signed_in : bool
-        Whether the user asked to stay signed in on this device, which
-        gives the session a longer lifetime.
-    created_at : datetime
-        Moment the session was opened.
-    expires_at : datetime
-        Moment after which the refresh token is no longer accepted.
-    revoked_at : datetime | None
-        Moment the session was ended, if it was.
-    """
-
-    id: UUID
-    user_id: UUID
-    keep_signed_in: bool
-    created_at: datetime
-    expires_at: datetime
-    revoked_at: datetime | None
-
-    def is_active(
-        self,
-        moment: datetime,
-    ) -> bool:
-        """Tell whether the session can still be used at a given moment.
-
-        Parameters
-        ----------
-        moment : datetime
-            Timezone-aware moment to evaluate.
-
-        Returns
-        -------
-        bool
-            ``True`` when the session is neither revoked nor expired.
-        """
-        return self.revoked_at is None and moment < self.expires_at
-
-
-@dataclass(frozen=True)
-class PasswordResetToken:
-    """A single-use permission to define a new password.
-
-    Attributes
-    ----------
-    id : UUID
-        Identifier of the token record.
-    user_id : UUID
-        User whose password may be reset.
-    expires_at : datetime
-        Moment after which the token is no longer accepted.
-    used_at : datetime | None
-        Moment the token was consumed, if it was.
-    """
-
-    id: UUID
-    user_id: UUID
-    expires_at: datetime
-    used_at: datetime | None
-
-    def is_usable(
-        self,
-        moment: datetime,
-    ) -> bool:
-        """Tell whether the token can still be redeemed at a given moment.
-
-        Parameters
-        ----------
-        moment : datetime
-            Timezone-aware moment to evaluate.
-
-        Returns
-        -------
-        bool
-            ``True`` when the token is neither used nor expired.
-        """
-        return self.used_at is None and moment < self.expires_at

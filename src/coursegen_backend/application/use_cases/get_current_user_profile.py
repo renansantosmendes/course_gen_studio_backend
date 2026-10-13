@@ -36,7 +36,7 @@ class GetCurrentUserProfileUseCase:
         Parameters
         ----------
         principal : AuthenticatedPrincipal
-            The authenticated user and session.
+            The authenticated user.
 
         Returns
         -------

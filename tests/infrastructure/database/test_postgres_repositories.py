@@ -4,29 +4,19 @@ They check SQL targets, parameters and row mapping; behavior against a
 real database is out of the scope of the unit tests.
 """
 
-from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+from psycopg import errors
 
-from coursegen_backend.application.ports.repositories import AuditEvent
+from coursegen_backend.domain.exceptions import AccountLinkConflictError
 from coursegen_backend.infrastructure.database import unit_of_work
-from coursegen_backend.infrastructure.database.audit_log_repository import (
-    PostgresAuditLogRepository,
-)
-from coursegen_backend.infrastructure.database.password_reset_token_repository import (
-    PostgresPasswordResetTokenRepository,
-)
-from coursegen_backend.infrastructure.database.session_repository import (
-    PostgresSessionRepository,
-)
 from coursegen_backend.infrastructure.database.user_repository import (
     PostgresUserRepository,
 )
-
-MOMENT = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+from tests.fakes import make_identity
 
 
 class RecordingConnection:
@@ -81,27 +71,67 @@ class RecordingConnection:
         return cursor
 
 
-def test_user_repository_maps_rows_and_memberships() -> None:
-    """Users and memberships are mapped from rows."""
+def user_row(user_id: UUID) -> dict[str, Any]:
+    """Build a row of ``coursegen.users``.
+
+    Parameters
+    ----------
+    user_id : UUID
+        Identifier of the user.
+
+    Returns
+    -------
+    dict[str, Any]
+        Row with every selected column.
+    """
+    return {
+        "id": user_id,
+        "email": "camila@example.com",
+        "full_name": "Camila Torres",
+        "job_title": None,
+        "is_active": True,
+    }
+
+
+def test_get_by_id_maps_row() -> None:
+    """Profiles are read from ``coursegen.users``."""
     user_id = uuid4()
-    connection = RecordingConnection(
-        rows=[
-            {
-                "id": user_id,
-                "email": "camila@uni.edu",
-                "full_name": "Camila Torres",
-                "job_title": None,
-                "password_hash": "$argon2id$...",
-                "is_active": True,
-                "last_login_at": None,
-            }
-        ]
-    )
-    repository = PostgresUserRepository(connection)
-    user = repository.get_by_email("Camila@Uni.edu")
+    connection = RecordingConnection(rows=[user_row(user_id)])
+    user = PostgresUserRepository(connection).get_by_id(user_id)
     assert user.id == user_id
-    assert "FROM coursegen.users WHERE email = %s" in connection.calls[0][0]
-    membership_connection = RecordingConnection(
+    assert "FROM coursegen.users WHERE id = %s" in connection.calls[0][0]
+
+
+def test_get_by_id_returns_none_when_missing() -> None:
+    """Unknown identifiers map to ``None``."""
+    assert PostgresUserRepository(RecordingConnection()).get_by_id(
+        uuid4()
+    ) is None
+
+
+def test_save_identity_upserts_only_identity_fields() -> None:
+    """The upsert touches e-mail and name, never local fields."""
+    identity = make_identity()
+    connection = RecordingConnection(rows=[user_row(identity.user_id)])
+    PostgresUserRepository(connection).save_identity(identity)
+    query, parameters = connection.calls[0]
+    assert "ON CONFLICT (id) DO UPDATE" in query
+    assert "job_title" not in query.split("DO UPDATE")[1].split("RETURNING")[0]
+    assert "is_active =" not in query
+    assert parameters == (identity.user_id, identity.email, identity.full_name)
+
+
+def test_save_identity_translates_email_conflict() -> None:
+    """A unique violation on e-mail becomes a link conflict."""
+    connection = MagicMock()
+    connection.execute.side_effect = errors.UniqueViolation("duplicate")
+    with pytest.raises(AccountLinkConflictError):
+        PostgresUserRepository(connection).save_identity(make_identity())
+
+
+def test_list_memberships_maps_roles() -> None:
+    """Memberships group the roles of each organization."""
+    connection = RecordingConnection(
         rows=[
             {
                 "id": uuid4(),
@@ -111,76 +141,8 @@ def test_user_repository_maps_rows_and_memberships() -> None:
             }
         ]
     )
-    memberships = PostgresUserRepository(
-        membership_connection
-    ).list_memberships(user_id)
+    memberships = PostgresUserRepository(connection).list_memberships(uuid4())
     assert memberships[0].roles == ("admin", "author")
-
-
-def test_user_repository_returns_none_when_missing() -> None:
-    """Missing users map to ``None``."""
-    assert PostgresUserRepository(RecordingConnection()).get_by_id(
-        uuid4()
-    ) is None
-
-
-def test_session_repository_casts_ip_and_counts_revocations() -> None:
-    """Sessions cast the IP to ``inet`` and report revoked rows."""
-    session_row = {
-        "id": uuid4(),
-        "user_id": uuid4(),
-        "keep_signed_in": True,
-        "created_at": MOMENT,
-        "expires_at": MOMENT,
-        "revoked_at": None,
-    }
-    connection = RecordingConnection(rows=[session_row], rowcount=2)
-    repository = PostgresSessionRepository(connection)
-    session = repository.create(
-        user_id=session_row["user_id"],
-        refresh_token_hash="hash",
-        keep_signed_in=True,
-        user_agent="pytest",
-        ip_address="203.0.113.7",
-        expires_at=MOMENT,
-    )
-    assert session.id == session_row["id"]
-    assert "%s::inet" in connection.calls[0][0]
-    assert repository.revoke_all_for_user(session.user_id, MOMENT) == 2
-    repository.get_by_refresh_token_hash("hash")
-    assert "FOR UPDATE" in connection.calls[-1][0]
-
-
-def test_reset_token_repository_maps_rows() -> None:
-    """Reset tokens are mapped and invalidated per user."""
-    token_row = {
-        "id": uuid4(),
-        "user_id": uuid4(),
-        "expires_at": MOMENT,
-        "used_at": None,
-    }
-    connection = RecordingConnection(rows=[token_row])
-    repository = PostgresPasswordResetTokenRepository(connection)
-    assert repository.get_by_token_hash("hash").id == token_row["id"]
-    repository.invalidate_all_for_user(token_row["user_id"], MOMENT)
-    assert "used_at IS NULL" in connection.calls[-1][0]
-
-
-def test_audit_log_repository_records_and_counts() -> None:
-    """Events are inserted as JSONB and counted per entity."""
-    connection = RecordingConnection(rows=[{"total": 4}])
-    repository = PostgresAuditLogRepository(connection)
-    repository.record(AuditEvent(action="auth.login", details={"a": 1}))
-    assert "INSERT INTO coursegen.audit_log" in connection.calls[0][0]
-    assert (
-        repository.count_for_entity_since(
-            "auth.login_failed",
-            "user",
-            uuid4(),
-            MOMENT,
-        )
-        == 4
-    )
 
 
 def test_unit_of_work_rolls_back_and_closes(

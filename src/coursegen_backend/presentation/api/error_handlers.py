@@ -8,29 +8,21 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from coursegen_backend.domain.exceptions import (
+    AccountDisabledError,
+    AccountLinkConflictError,
+    AuthServiceUnavailableError,
     DomainError,
-    IncorrectCurrentPasswordError,
     InvalidAccessTokenError,
-    InvalidCredentialsError,
-    InvalidPasswordResetTokenError,
-    InvalidRefreshTokenError,
-    PasswordReuseError,
-    TooManyLoginAttemptsError,
-    WeakPasswordError,
 )
 from coursegen_backend.presentation.api.schemas.common import ErrorResponse
 
 logger = logging.getLogger(__name__)
 
 STATUS_BY_ERROR: dict[type[DomainError], int] = {
-    InvalidCredentialsError: status.HTTP_401_UNAUTHORIZED,
     InvalidAccessTokenError: status.HTTP_401_UNAUTHORIZED,
-    InvalidRefreshTokenError: status.HTTP_401_UNAUTHORIZED,
-    TooManyLoginAttemptsError: status.HTTP_429_TOO_MANY_REQUESTS,
-    InvalidPasswordResetTokenError: status.HTTP_400_BAD_REQUEST,
-    WeakPasswordError: status.HTTP_400_BAD_REQUEST,
-    PasswordReuseError: status.HTTP_400_BAD_REQUEST,
-    IncorrectCurrentPasswordError: status.HTTP_400_BAD_REQUEST,
+    AccountDisabledError: status.HTTP_403_FORBIDDEN,
+    AccountLinkConflictError: status.HTTP_409_CONFLICT,
+    AuthServiceUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
 }
 
 
@@ -108,18 +100,12 @@ async def handle_domain_error(
         status.HTTP_400_BAD_REQUEST,
     )
     headers = None
-    details = None
     if isinstance(error, InvalidAccessTokenError):
         headers = {"WWW-Authenticate": "Bearer"}
-    if isinstance(error, TooManyLoginAttemptsError):
-        headers = {"Retry-After": str(error.retry_after_seconds)}
-    if isinstance(error, WeakPasswordError):
-        details = error.violations
     return build_error_response(
         status_code=status_code,
         code=error.code,
         message=error.message,
-        details=details,
         headers=headers,
     )
 

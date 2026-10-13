@@ -7,15 +7,6 @@ import psycopg
 from psycopg.rows import dict_row
 
 from coursegen_backend.application.ports.unit_of_work import UnitOfWork
-from coursegen_backend.infrastructure.database import (
-    password_reset_token_repository,
-)
-from coursegen_backend.infrastructure.database.audit_log_repository import (
-    PostgresAuditLogRepository,
-)
-from coursegen_backend.infrastructure.database.session_repository import (
-    PostgresSessionRepository,
-)
 from coursegen_backend.infrastructure.database.user_repository import (
     PostgresUserRepository,
 )
@@ -65,13 +56,6 @@ class PostgresUnitOfWork(UnitOfWork):
             connect_timeout=self._connect_timeout_seconds,
         )
         self.users = PostgresUserRepository(self._connection)
-        self.sessions = PostgresSessionRepository(self._connection)
-        self.password_reset_tokens = (
-            password_reset_token_repository.PostgresPasswordResetTokenRepository(
-                self._connection
-            )
-        )
-        self.audit_log = PostgresAuditLogRepository(self._connection)
         return self
 
     def __exit__(

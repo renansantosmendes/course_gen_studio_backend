@@ -8,15 +8,26 @@ HTML pages) and the database schema live in the sibling repository
 `../course_gen_studio_front`.
 
 FastAPI application (package `src/coursegen_backend`) deployed on
-Vercel through `api/index.py` and `vercel.json`. It currently covers
-sign-in, sessions and password management.
+Vercel through `api/index.py` and `vercel.json`.
+
+## About authentication
+
+- Sign-in, sessions and passwords live in the separate auth service
+  (`../auth_service`). This back end never stores passwords or issues
+  tokens: it verifies the RS256 access tokens from the auth service with
+  its JWKS (`AUTH_JWKS_URL`), checking issuer and audience.
+- `coursegen.users.id` is the auth service account id (token `sub`). The
+  first request of an account creates its profile; e-mail and name are
+  kept in sync from the token, while `job_title`, `is_active` and
+  memberships belong to CourseGen and are never overwritten.
+- Protect new routes with the `get_current_principal` dependency.
 
 ## About the architecture
 
 - Clean Architecture with SOLID; dependencies point inwards only:
   `domain` (entities, errors, rules; no I/O) <- `application` (use
   cases, ports, policies, DTOs) <- `infrastructure` (PostgreSQL,
-  Argon2, JWT, SMTP, settings) and `presentation/api` (FastAPI).
+  JWKS token verifier, settings) and `presentation/api` (FastAPI).
 - Use cases depend on ports from `application/ports`, never on
   adapters. Wire implementations only in
   `presentation/api/dependencies.py`.

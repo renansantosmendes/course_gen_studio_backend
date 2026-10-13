@@ -4,12 +4,7 @@ from abc import ABC, abstractmethod
 from types import TracebackType
 from typing import Self
 
-from coursegen_backend.application.ports.repositories import (
-    AuditLogRepository,
-    PasswordResetTokenRepository,
-    SessionRepository,
-    UserRepository,
-)
+from coursegen_backend.application.ports.repositories import UserRepository
 
 
 class UnitOfWork(ABC):
@@ -21,25 +16,16 @@ class UnitOfWork(ABC):
     Attributes
     ----------
     users : UserRepository
-        Access to user accounts.
-    sessions : SessionRepository
-        Access to signed-in sessions.
-    password_reset_tokens : PasswordResetTokenRepository
-        Access to password reset tokens.
-    audit_log : AuditLogRepository
-        Access to the audit trail.
+        Access to user profiles.
 
     Example
     -------
     >>> with unit_of_work as uow:
-    ...     uow.users.update_last_login(user_id, now)
+    ...     uow.users.save_identity(identity)
     ...     uow.commit()
     """
 
     users: UserRepository
-    sessions: SessionRepository
-    password_reset_tokens: PasswordResetTokenRepository
-    audit_log: AuditLogRepository
 
     @abstractmethod
     def __enter__(self) -> Self:

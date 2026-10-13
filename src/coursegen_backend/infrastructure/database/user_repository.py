@@ -1,18 +1,19 @@
 """PostgreSQL implementation of the user repository."""
 
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from psycopg import Connection
+from psycopg import Connection, errors
 
 from coursegen_backend.application.ports.repositories import UserRepository
-from coursegen_backend.domain.entities import OrganizationMembership, User
+from coursegen_backend.domain.entities import (
+    OrganizationMembership,
+    User,
+    VerifiedIdentity,
+)
+from coursegen_backend.domain.exceptions import AccountLinkConflictError
 
-USER_COLUMNS = """
-    id, email, full_name, job_title, password_hash, is_active,
-    last_login_at
-"""
+USER_COLUMNS = "id, email, full_name, job_title, is_active"
 
 
 def map_user(row: dict[str, Any]) -> User:
@@ -33,14 +34,12 @@ def map_user(row: dict[str, Any]) -> User:
         email=row["email"],
         full_name=row["full_name"],
         job_title=row["job_title"],
-        password_hash=row["password_hash"],
         is_active=row["is_active"],
-        last_login_at=row["last_login_at"],
     )
 
 
 class PostgresUserRepository(UserRepository):
-    """Reads and updates ``coursegen.users``."""
+    """Reads and provisions ``coursegen.users``."""
 
     def __init__(
         self,
@@ -60,43 +59,21 @@ class PostgresUserRepository(UserRepository):
         """
         self._connection = connection
 
-    def get_by_email(
-        self,
-        email: str,
-    ) -> User | None:
-        """Find a user by e-mail; the ``citext`` column ignores case.
-
-        Parameters
-        ----------
-        email : str
-            E-mail address.
-
-        Returns
-        -------
-        User | None
-            The user, or ``None`` when no account uses the e-mail.
-        """
-        row = self._connection.execute(
-            f"SELECT {USER_COLUMNS} FROM coursegen.users WHERE email = %s",
-            (email,),
-        ).fetchone()
-        return map_user(row) if row else None
-
     def get_by_id(
         self,
         user_id: UUID,
     ) -> User | None:
-        """Find a user by identifier.
+        """Find a profile by identifier.
 
         Parameters
         ----------
         user_id : UUID
-            Identifier of the user.
+            Identifier shared with the auth service.
 
         Returns
         -------
         User | None
-            The user, or ``None`` when it does not exist.
+            The profile, or ``None`` when it does not exist yet.
         """
         row = self._connection.execute(
             f"SELECT {USER_COLUMNS} FROM coursegen.users WHERE id = %s",
@@ -104,51 +81,45 @@ class PostgresUserRepository(UserRepository):
         ).fetchone()
         return map_user(row) if row else None
 
-    def update_password_hash(
+    def save_identity(
         self,
-        user_id: UUID,
-        password_hash: str,
-    ) -> None:
-        """Replace the stored password hash of a user.
+        identity: VerifiedIdentity,
+    ) -> User:
+        """Insert the profile of an identity, or refresh its e-mail and name.
+
+        ``job_title`` and ``is_active`` belong to CourseGen and are never
+        overwritten.
 
         Parameters
         ----------
-        user_id : UUID
-            Identifier of the user.
-        password_hash : str
-            New password hash.
+        identity : VerifiedIdentity
+            Identity read from a valid access token.
 
         Returns
         -------
-        None
+        User
+            The stored profile.
+
+        Raises
+        ------
+        AccountLinkConflictError
+            When another profile already uses the identity's e-mail.
         """
-        self._connection.execute(
-            "UPDATE coursegen.users SET password_hash = %s WHERE id = %s",
-            (password_hash, user_id),
-        )
-
-    def update_last_login(
-        self,
-        user_id: UUID,
-        moment: datetime,
-    ) -> None:
-        """Record the moment of a successful sign-in.
-
-        Parameters
-        ----------
-        user_id : UUID
-            Identifier of the user.
-        moment : datetime
-            Moment of the sign-in.
-
-        Returns
-        -------
-        None
-        """
-        self._connection.execute(
-            "UPDATE coursegen.users SET last_login_at = %s WHERE id = %s",
-            (moment, user_id),
-        )
+        try:
+            row = self._connection.execute(
+                f"""
+                INSERT INTO coursegen.users (id, email, full_name)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (id) DO UPDATE
+                   SET email = EXCLUDED.email,
+                       full_name = EXCLUDED.full_name
+                RETURNING {USER_COLUMNS}
+                """,
+                (identity.user_id, identity.email, identity.full_name),
+            ).fetchone()
+        except errors.UniqueViolation as error:
+            raise AccountLinkConflictError() from error
+        return map_user(row)
 
     def list_memberships(
         self,

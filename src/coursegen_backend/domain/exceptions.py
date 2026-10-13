@@ -1,4 +1,4 @@
-"""Business errors raised by the authentication context.
+"""Business errors raised by CourseGen Studio.
 
 Every error carries a stable, machine-readable ``code`` and a
 human-readable ``message``. The presentation layer decides how each one
@@ -40,106 +40,37 @@ class DomainError(Exception):
         super().__init__(self.message)
 
 
-class InvalidCredentialsError(DomainError):
-    """The e-mail and password pair does not match an active account."""
-
-    code = "invalid_credentials"
-    message = "Invalid e-mail or password."
-
-
-class TooManyLoginAttemptsError(DomainError):
-    """Too many failed sign-in attempts were made in a short period.
-
-    Attributes
-    ----------
-    retry_after_seconds : int
-        How long the client should wait before trying again.
-    """
-
-    code = "too_many_login_attempts"
-    message = "Too many failed sign-in attempts. Try again later."
-
-    def __init__(
-        self,
-        retry_after_seconds: int,
-    ) -> None:
-        """Create the error with the waiting time the client must respect.
-
-        Parameters
-        ----------
-        retry_after_seconds : int
-            Seconds until a new attempt is allowed.
-
-        Returns
-        -------
-        None
-        """
-        self.retry_after_seconds = retry_after_seconds
-        super().__init__()
-
-
 class InvalidAccessTokenError(DomainError):
-    """The access token is missing, malformed, expired or revoked."""
+    """The access token is missing, malformed, expired or not trusted."""
 
     code = "invalid_access_token"
-    message = "The access token is missing, invalid, expired or revoked."
+    message = "The access token is missing, invalid or expired."
 
 
-class InvalidRefreshTokenError(DomainError):
-    """The refresh token is unknown, expired or belongs to an ended
-    session."""
+class AccountDisabledError(DomainError):
+    """The person was blocked from using CourseGen Studio."""
 
-    code = "invalid_refresh_token"
-    message = "The refresh token is invalid, expired or revoked."
-
-
-class InvalidPasswordResetTokenError(DomainError):
-    """The password reset token is unknown, expired or already used."""
-
-    code = "invalid_password_reset_token"
-    message = "The password reset link is invalid, expired or already used."
+    code = "account_disabled"
+    message = "This account is not allowed to use CourseGen Studio."
 
 
-class WeakPasswordError(DomainError):
-    """The new password does not satisfy the password policy.
+class AccountLinkConflictError(DomainError):
+    """A CourseGen profile with the same e-mail belongs to another account.
 
-    Attributes
-    ----------
-    violations : list[str]
-        One explanation for each rule that was broken.
+    Happens when a profile created before the auth service existed uses
+    the e-mail of a different auth service account; an administrator
+    must merge or remove it.
     """
 
-    code = "weak_password"
-    message = "The password does not meet the password policy."
-
-    def __init__(
-        self,
-        violations: list[str],
-    ) -> None:
-        """Create the error with the list of broken rules.
-
-        Parameters
-        ----------
-        violations : list[str]
-            Explanations of the rules the password does not satisfy.
-
-        Returns
-        -------
-        None
-        """
-        self.violations = violations
-        super().__init__()
+    code = "account_link_conflict"
+    message = (
+        "Another CourseGen Studio profile already uses this e-mail. "
+        "Contact an administrator."
+    )
 
 
-class PasswordReuseError(DomainError):
-    """The new password is the same as the current one."""
+class AuthServiceUnavailableError(DomainError):
+    """The auth service's public keys could not be fetched."""
 
-    code = "password_reuse"
-    message = "The new password must be different from the current one."
-
-
-class IncorrectCurrentPasswordError(DomainError):
-    """The current password informed to change the password is wrong."""
-
-    code = "incorrect_current_password"
-    message = "The current password is incorrect."
+    code = "auth_service_unavailable"
+    message = "The authentication service is unavailable. Try again later."

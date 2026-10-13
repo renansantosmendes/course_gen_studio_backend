@@ -1,20 +1,18 @@
-"""Use case: identify the user behind an access token."""
+"""Use case: identify the CourseGen user behind an access token."""
 
 from coursegen_backend.application.dto import AuthenticatedPrincipal
-from coursegen_backend.application.ports.clock import Clock
-from coursegen_backend.application.ports.security import AccessTokenService
+from coursegen_backend.application.ports.security import AccessTokenVerifier
 from coursegen_backend.application.ports.unit_of_work import UnitOfWork
-from coursegen_backend.domain.exceptions import InvalidAccessTokenError
+from coursegen_backend.domain.exceptions import AccountDisabledError
 
 
 class AuthenticateUseCase:
-    """Validates access tokens against the stored sessions."""
+    """Trusts tokens from the auth service and provisions local profiles."""
 
     def __init__(
         self,
         unit_of_work: UnitOfWork,
-        access_token_service: AccessTokenService,
-        clock: Clock,
+        access_token_verifier: AccessTokenVerifier,
     ) -> None:
         """Create the use case.
 
@@ -22,56 +20,58 @@ class AuthenticateUseCase:
         ----------
         unit_of_work : UnitOfWork
             Transaction boundary and repositories.
-        access_token_service : AccessTokenService
-            Validates and decodes the access token.
-        clock : Clock
-            Source of the current time.
+        access_token_verifier : AccessTokenVerifier
+            Validates tokens issued by the auth service.
 
         Returns
         -------
         None
         """
         self._unit_of_work = unit_of_work
-        self._access_token_service = access_token_service
-        self._clock = clock
+        self._access_token_verifier = access_token_verifier
 
     def execute(
         self,
         access_token: str,
     ) -> AuthenticatedPrincipal:
-        """Resolve the user and session of an access token.
+        """Resolve the CourseGen user of an access token.
 
-        Besides the token signature and expiration, the session must
-        still be open and the account active, so signing out or
-        resetting the password takes effect immediately.
+        The first time an account reaches CourseGen, its profile is
+        created with the token's identifier, e-mail and name; later, the
+        e-mail and name are refreshed when they change in the auth
+        service. Nothing is written when the profile is already current.
 
         Parameters
         ----------
         access_token : str
-            Encoded access token.
+            Encoded access token issued by the auth service.
 
         Returns
         -------
         AuthenticatedPrincipal
-            The authenticated user and session.
+            The authenticated CourseGen user.
 
         Raises
         ------
         InvalidAccessTokenError
-            When the token is invalid, the session ended or the account
-            is inactive.
+            When the token is not valid.
+        AccountDisabledError
+            When the person was blocked from CourseGen Studio.
+        AccountLinkConflictError
+            When another profile already uses the account's e-mail.
+
+        Example
+        -------
+        >>> principal = authenticate_use_case.execute(bearer_token)
+        >>> principal.user.email
+        'ana@example.com'
         """
-        claims = self._access_token_service.decode(access_token)
-        moment = self._clock.now()
+        identity = self._access_token_verifier.verify(access_token)
         with self._unit_of_work as uow:
-            session = uow.sessions.get_by_id(claims.session_id)
-            if (
-                session is None
-                or session.user_id != claims.user_id
-                or not session.is_active(moment)
-            ):
-                raise InvalidAccessTokenError()
-            user = uow.users.get_by_id(claims.user_id)
-            if user is None or not user.is_active:
-                raise InvalidAccessTokenError()
-        return AuthenticatedPrincipal(user=user, session_id=session.id)
+            user = uow.users.get_by_id(identity.user_id)
+            if user is None or not user.matches(identity):
+                user = uow.users.save_identity(identity)
+                uow.commit()
+        if not user.is_active:
+            raise AccountDisabledError()
+        return AuthenticatedPrincipal(user=user)

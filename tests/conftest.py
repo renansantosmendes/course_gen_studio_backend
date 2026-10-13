@@ -1,117 +1,96 @@
-"""Shared fixtures of the test suite."""
+"""Shared fixtures and token helpers of the test suite."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
+import jwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
 
-from coursegen_backend.application.policies import SessionPolicy
-from coursegen_backend.application.services.session_token_issuer import (
-    SessionTokenIssuer,
+from coursegen_backend.domain.entities import VerifiedIdentity
+from coursegen_backend.infrastructure.security.jwks_access_token_verifier import (
+    JwksAccessTokenVerifier,
 )
-from coursegen_backend.infrastructure.security.jwt_access_token_service import (
-    JwtAccessTokenService,
+from tests.fakes import InMemoryUnitOfWork
+
+ISSUER = "auth-service"
+AUDIENCE = "synapse-apps"
+SIGNING_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+OTHER_SIGNING_KEY = rsa.generate_private_key(
+    public_exponent=65537,
+    key_size=2048,
 )
-from coursegen_backend.infrastructure.security.opaque_token_generator import (
-    SecretsOpaqueTokenGenerator,
-)
-from tests.fakes import FakeClock, FakePasswordHasher, InMemoryUnitOfWork
-from tests.credentials import (
-    JWT_SECRET,
-)
-
-TEST_JWT_SECRET = JWT_SECRET
 
 
-@pytest.fixture
-def clock() -> FakeClock:
-    """Provide a frozen clock.
-
-    Returns
-    -------
-    FakeClock
-        Clock at the default moment.
-    """
-    return FakeClock()
-
-
-@pytest.fixture
-def unit_of_work(clock: FakeClock) -> InMemoryUnitOfWork:
-    """Provide an in-memory unit of work.
+def issue_token(
+    identity: VerifiedIdentity,
+    signing_key: Any = SIGNING_KEY,
+    lifetime: timedelta = timedelta(minutes=15),
+    **claim_overrides: Any,
+) -> str:
+    """Sign a token in the format issued by the auth service.
 
     Parameters
     ----------
-    clock : FakeClock
-        Clock shared with the repositories.
+    identity : VerifiedIdentity
+        Account the token is issued to.
+    signing_key : Any
+        RSA private key that signs the token.
+    lifetime : timedelta
+        Time until expiration; negative for an expired token.
+    **claim_overrides : Any
+        Claims to replace, or to remove when given as ``None``.
+
+    Returns
+    -------
+    str
+        Encoded RS256 token.
+    """
+    now = datetime.now(UTC)
+    claims = {
+        "sub": str(identity.user_id),
+        "sid": "00000000-0000-0000-0000-000000000001",
+        "email": identity.email,
+        "name": identity.full_name,
+        "typ": "access",
+        "iss": ISSUER,
+        "aud": AUDIENCE,
+        "iat": now,
+        "exp": now + lifetime,
+    }
+    claims.update(claim_overrides)
+    claims = {key: value for key, value in claims.items() if value is not None}
+    return jwt.encode(
+        claims,
+        signing_key,
+        algorithm="RS256",
+        headers={"kid": "test-key"},
+    )
+
+
+@pytest.fixture
+def unit_of_work() -> InMemoryUnitOfWork:
+    """Provide an in-memory unit of work.
 
     Returns
     -------
     InMemoryUnitOfWork
         Empty unit of work.
     """
-    return InMemoryUnitOfWork(clock)
+    return InMemoryUnitOfWork()
 
 
 @pytest.fixture
-def password_hasher() -> FakePasswordHasher:
-    """Provide the fake password hasher.
+def access_token_verifier() -> JwksAccessTokenVerifier:
+    """Provide a verifier that trusts the test signing key.
 
     Returns
     -------
-    FakePasswordHasher
-        Instant hasher.
+    JwksAccessTokenVerifier
+        Verifier whose key resolver returns the test public key.
     """
-    return FakePasswordHasher()
-
-
-@pytest.fixture
-def token_generator() -> SecretsOpaqueTokenGenerator:
-    """Provide the real opaque token generator.
-
-    Returns
-    -------
-    SecretsOpaqueTokenGenerator
-        Token generator.
-    """
-    return SecretsOpaqueTokenGenerator()
-
-
-@pytest.fixture
-def access_token_service() -> JwtAccessTokenService:
-    """Provide a JWT service with a test secret.
-
-    Returns
-    -------
-    JwtAccessTokenService
-        Service issuing 15-minute tokens.
-    """
-    return JwtAccessTokenService(
-        secret_key=TEST_JWT_SECRET,
-        time_to_live=timedelta(minutes=15),
-        issuer="coursegen-studio",
-    )
-
-
-@pytest.fixture
-def session_token_issuer(
-    access_token_service: JwtAccessTokenService,
-    token_generator: SecretsOpaqueTokenGenerator,
-) -> SessionTokenIssuer:
-    """Provide a session token issuer with default lifetimes.
-
-    Parameters
-    ----------
-    access_token_service : JwtAccessTokenService
-        Access token service.
-    token_generator : SecretsOpaqueTokenGenerator
-        Refresh token generator.
-
-    Returns
-    -------
-    SessionTokenIssuer
-        Issuer with 12-hour and 30-day refresh lifetimes.
-    """
-    return SessionTokenIssuer(
-        access_token_service=access_token_service,
-        token_generator=token_generator,
-        session_policy=SessionPolicy(),
+    return JwksAccessTokenVerifier(
+        signing_key_resolver=lambda _token: SIGNING_KEY.public_key(),
+        issuer=ISSUER,
+        audience=AUDIENCE,
     )
