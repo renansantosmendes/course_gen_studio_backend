@@ -113,3 +113,19 @@ def func1(
 - Always check whether the existing documentation (README, docstrings,
   files under `docs/`, if any) is still consistent with the change; if
   it needs an update, update it right away.
+
+## About documentation
+
+- Every README must start with Shields.io badges
+  (`https://img.shields.io`) for the main technologies used by the project:
+  language, frameworks, libraries, cloud services and CI. Use the static
+  badge format
+  `https://img.shields.io/badge/<Label>-<Message>-<color>?logo=<logo>&logoColor=white`,
+  and include the version when the project pins it.
+- Every README must include at least one Mermaid diagram (a fenced
+  `mermaid` block) showing the architecture or the main flow of the
+  project, so GitHub renders it in the page.
+- Larger diagrams can live under `docs/` as Excalidraw files
+  (`.excalidraw`) and be linked from the README.
+- When a change affects the architecture, routes, configuration, tech stack
+  or CI, update the badges and diagrams in the same change.

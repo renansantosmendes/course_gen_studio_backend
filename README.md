@@ -1,5 +1,7 @@
 # CourseGen Studio API
 
+![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-in_use-009688?logo=fastapi&logoColor=white) ![uvicorn](https://img.shields.io/badge/uvicorn-in_use-499848) ![pytest](https://img.shields.io/badge/pytest-in_use-0A9EDC?logo=pytest&logoColor=white) ![pylint](https://img.shields.io/badge/pylint-in_use-yellow) ![Pydantic](https://img.shields.io/badge/Pydantic-in_use-E92063?logo=pydantic&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-in_use-4169E1?logo=postgresql&logoColor=white) ![Vercel](https://img.shields.io/badge/Vercel-deploy-000000?logo=vercel&logoColor=white) ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI-2088FF?logo=githubactions&logoColor=white)
+
 Authentication and password management API of CourseGen Studio, built
 with FastAPI and deployed on Vercel. It uses the `coursegen` schema of the
 Neon PostgreSQL database defined in
@@ -94,3 +96,13 @@ every push to `main` and every pull request.
    `CORS_ALLOWED_ORIGINS`, `EMAIL_BACKEND=smtp` and the `SMTP_*` values.
 3. Deploy. `vercel.json` routes every path to `api/index.py`, and
    Vercel installs `requirements.txt`.
+
+## Architecture overview
+
+```mermaid
+flowchart LR
+    repo["course_gen_studio_backend"]
+    repo --> d0["api/"]
+    repo --> d1["src/"]
+    repo --> d2["tests/"]
+```
